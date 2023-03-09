@@ -17,7 +17,6 @@ class OcrEngineRam:
         ramMax = Config.get('ocrRamMaxFootprint')
         if ramMax > 0:
             if ram > ramMax:
-                print(f'内存占用超标！！！')
                 self.restart()
 
     def runAfter(self):
@@ -32,10 +31,7 @@ class OcrEngineRam:
     def runTimer(self, t):
         '''最后一次运行后，定时器生效'''
         if self.lastTimer == t and self.getEngFlag() == self.EngFlag.waiting:
-            print('有效的定时器！！！！！！！！！！')
             self.restart()
-        else:
-            print('×××××××××××')
 
 
 OcrEngRam = OcrEngineRam()

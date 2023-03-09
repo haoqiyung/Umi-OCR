@@ -415,10 +415,9 @@ OCR识别出的文本是按“块”划分的，通常一行文字分为一块�
 
 </details>
 
-▼ 已完成，未发布
+▼ 测试中 （[测试版](https://github.com/hiroi-sora/Umi-OCR/issues/96) 已开放下载。）
 - 定时或超过限度时自动清理引擎内存占用。
-
-▼ 计划中
+- 通过命令行控制Umi-OCR。
 - 弹出悬浮的识别成功与否的提示。
 
 <details>
@@ -520,6 +519,9 @@ OCR识别出的文本是按“块”划分的，通常一行文字分为一块�
 > Awesome multilingual OCR toolkits based on PaddlePaddle
 
 ##### 本项目中所使用的库：
+
+##### [google/python-gflags](https://github.com/google/python-gflags)
+> Python implementation of the Google commandline flags module.
 
 ##### [moses-palmer/pynput](https://github.com/moses-palmer/pynput)
 > This library allows you to control and monitor input devices.

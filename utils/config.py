@@ -50,9 +50,8 @@ class ClickTrayModeFlag(Enum):
 class WindowTopModeFlag():
     '''窗口置顶模式标志'''
     # 不继承枚举
-    never = 0  # 永不
+    never = 0  # 永不，静默模式
     finish = 1  # 任务完成时置顶
-    eternity = 2  # 永远保持置顶
 
 
 # 配置文件路径
@@ -77,7 +76,7 @@ _ConfigDict = {
         'isTK': True,
     },
     'isBackground': {  # T时点关闭进入后台运行
-        'default': False,
+        'default': True,
         'isSave': True,
         'isTK': True,
     },
@@ -112,11 +111,16 @@ _ConfigDict = {
     },
     'isWindowTop': {  # T时窗口置顶
         'default': False,
-        'isSave': False,  # 不保存，仅作为标记
+        'isSave': True,
         'isTK': True,
     },
     'WindowTopMode': {  # 窗口置顶模式
         'default': WindowTopModeFlag.finish,
+        'isSave': True,
+        'isTK': True,
+    },
+    'isNotify': {  # T时启用消息弹窗
+        'default': True,
         'isSave': True,
         'isTK': True,
     },
@@ -456,6 +460,8 @@ class ConfigModule:
 
     __tkSaveTime = 200  # tk变量改变多长时间后写入本地。毫秒
 
+    _initFlag = False  # 标记程序初始化完成，可以正常接客
+
     # ==================== 初始化 ====================
 
     def __init__(self):
@@ -474,6 +480,13 @@ class ConfigModule:
                 self.__saveList.append(key)
             if value.get('isTK', False):
                 self.__tkDict[key] = None
+
+    def isInit(self):
+        '''查询程序是否初始化完成'''
+        return self._initFlag
+
+    def initOK(self):
+        self._initFlag = True
 
     def initTK(self, main):
         '''初始化tk变量'''
@@ -578,8 +591,13 @@ class ConfigModule:
         saveDict = {}  # 提取需要保存的项
         for key in self.__saveList:
             saveDict[key] = self.__optDict[key]
-        with open(ConfigJsonFile, 'w', encoding='utf8')as fp:
-            fp.write(json.dumps(saveDict, indent=4, ensure_ascii=False))
+        try:
+            with open(ConfigJsonFile, 'w', encoding='utf8')as fp:
+                fp.write(json.dumps(saveDict, indent=4, ensure_ascii=False))
+        except Exception as e:
+            tk.messagebox.showerror(
+                '警告',
+                f'无法保存配置文件，请检查是否有足够的权限。\n{e}')
 
     # ==================== 操作变量 ====================
 

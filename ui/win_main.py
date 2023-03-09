@@ -5,6 +5,8 @@ from utils.data_structure import KeyList
 from utils.tool import Tool
 from utils.startup import Startup  # 启动方式
 from utils.hotkey import Hotkey  # 快捷键
+from utils.command_arg import Parse, Mission  # 启动参数分析
+from ui.win_notify import Notify  # 通知弹窗
 from ui.win_screenshot import ScreenshotCopy  # 截屏
 from ui.win_select_area import IgnoreAreaWin  # 子窗口
 from ui.win_ocr_language import ChangeOcrLanguage  # 更改语言
@@ -18,6 +20,7 @@ from ocr.msn_quick import MsnQuick
 
 import os
 import ctypes
+from sys import argv
 from PIL import Image  # 图像
 import tkinter as tk
 import tkinter.font
@@ -79,6 +82,7 @@ class MainWin:
         initWin()
 
         # 2.初始化配置项
+        self.win.bind('<<QuitEvent>>', lambda *e: self.onClose())  # 退出事件
         Config.initTK(self)  # 初始化设置项
         Config.load()  # 加载本地文件
         Config.checkMultiOpen()  # 检查多开
@@ -271,24 +275,14 @@ class MainWin:
                     tipsLab.pack(side='top')
                 tk.Frame(fTips).pack(side='top')  # 空框架，用于自动调整高度的占位
 
-                def changeWinTopMode():  # 改变窗口置顶【模式】事件
-                    Config.set('isWindowTop',
-                               Config.get('WindowTopMode') == WindowTopModeFlag.eternity)
-                Config.addTrace('WindowTopMode', changeWinTopMode)
-                changeWinTopMode()  # 初始化
-
-                def changeWinTopIS():  # 改变窗口置顶【标志】事件
-                    Config.set('WindowTopMode',  # 改变窗口置顶模式
-                               WindowTopModeFlag.eternity if Config.get('isWindowTop') else WindowTopModeFlag.finish)
-                    self.gotoTop()
-                    if Config.get('isWindowTop'):  # 切换到置顶
+                def changeIsWinTop():
+                    if Config.get('isWindowTop'):  # 启用置顶
                         tipsLab.pack(side='top')
-                    else:
+                    else:  # 取消置顶
                         tipsLab.pack_forget()
-                    # 不刷新框架，而是在尾部预留空间来容纳高度变化
-                    # self.updateFrameHeight()  # 刷新框架
-                Config.addTrace('isWindowTop', changeWinTopIS)
-                # 以上两个事件互相调用不会造成无限递归，因为配置项被修改同步后，第二次set不会再调用跟踪事件。
+                    self.gotoTop()
+                Config.addTrace('isWindowTop', changeIsWinTop)
+
             initTopTips()
 
             def initSoftwareFrame():  # 软件行为设置
@@ -353,43 +347,49 @@ class MainWin:
 
                 fr2 = tk.Frame(fSoft)
                 fr2.pack(side='top', fill='x', pady=2, padx=5)
-                self.balloon.bind(fr2, '不显示系统托盘图标时，关闭面板会退出软件')
-                tk.Label(fr2, text='窗口关闭：').pack(side='left', padx=2)
-                ttk.Radiobutton(fr2, text='最小化到托盘',
-                                variable=Config.getTK('isBackground'), value=True).pack(side='left')
+                tk.Label(fr2, text='主窗口关闭：').pack(side='left', padx=2)
                 ttk.Radiobutton(fr2, text='退出软件',
-                                variable=Config.getTK('isBackground'), value=False).pack(side='left', padx=15)
+                                variable=Config.getTK('isBackground'), value=False).pack(side='left')
+                wid = ttk.Radiobutton(fr2, text='最小化到托盘',
+                                      variable=Config.getTK('isBackground'), value=True)
+                wid.pack(side='left', padx=15)
+                self.balloon.bind(wid, '显示系统托盘图标时，本选项才有效')
 
                 # 弹出方式设置
                 fr3 = tk.Frame(fSoft)
                 fr3.pack(side='top', fill='x', pady=2, padx=5)
-                tk.Label(fr3, text='窗口置顶：').pack(side='left', padx=2)
+                tk.Label(fr3, text='主窗口弹出：').pack(side='left', padx=2)
                 wid = ttk.Radiobutton(fr3, text='自动弹出',
                                       variable=Config.getTK('WindowTopMode'), value=WindowTopModeFlag.finish)
                 wid.pack(side='left')
                 self.balloon.bind(
-                    wid, '当主窗口处于后台，\n唤起快捷识图、或批量任务完成时弹出')
-                wid = ttk.Radiobutton(fr3, text='始终置顶',
-                                      variable=Config.getTK('WindowTopMode'), value=WindowTopModeFlag.eternity)
-                wid.pack(side='left', padx=5)
-                self.balloon.bind(
-                    wid, '窗口锁定于系统顶层\n\n启用后，软件内的鼠标悬停提示框会被隐藏')
-                wid = ttk.Radiobutton(fr3, text='不要弹出',
+                    wid, '唤起快捷识图、或批量任务完成时弹出主窗口')
+                wid = ttk.Radiobutton(fr3, text='静默模式',
                                       variable=Config.getTK('WindowTopMode'), value=WindowTopModeFlag.never)
-                wid.pack(side='left')
+                wid.pack(side='left', padx=15)
                 self.balloon.bind(
-                    wid, '不会主动弹出窗口')
+                    wid, '不会主动弹出窗口\n建议启用通知弹窗')
 
-                # 启动方式设置
+                # 消息弹窗设置
+                def changeNotify():
+                    if Config.get('isNotify'):
+                        Notify('欢迎使用 Umi-OCR', '通知弹窗已开启')
+                Config.addTrace('isNotify', changeNotify)
                 fr4 = tk.Frame(fSoft)
                 fr4.pack(side='top', fill='x', pady=2, padx=5)
+                ttk.Checkbutton(
+                    fr4, variable=Config.getTK('isNotify'), text='启用通知弹窗').pack(side='left')
+
+                # 启动方式设置
+                fr5 = tk.Frame(fSoft)
+                fr5.pack(side='top', fill='x', pady=2, padx=5)
                 self.balloon.bind(
-                    fr4, '可设置静默启动，收纳到系统托盘，不显示主窗口')
-                ttk.Checkbutton(fr4, variable=Config.getTK('isAutoStartup'),
+                    fr5, '可设置静默启动，收纳到系统托盘，不显示主窗口')
+                ttk.Checkbutton(fr5, variable=Config.getTK('isAutoStartup'),
                                 text='开机自启', command=Startup.switchAutoStartup).pack(side='left')
-                ttk.Checkbutton(fr4, variable=Config.getTK('isStartMenu'),
+                ttk.Checkbutton(fr5, variable=Config.getTK('isStartMenu'),
                                 text='开始菜单项', command=Startup.switchStartMenu).pack(side='left', padx=20)
-                ttk.Checkbutton(fr4, variable=Config.getTK('isDesktop'),
+                ttk.Checkbutton(fr5, variable=Config.getTK('isDesktop'),
                                 text='桌面快捷方式', command=Startup.switchDesktop).pack(side='left')
             initSoftwareFrame()
 
@@ -871,34 +871,30 @@ class MainWin:
         initTab3()
 
         # 解析启动参数
-        def getArgs():
-            try:
-                parser = ArgumentParser()
-                parser.add_argument('--no_win', dest='isNoWin', type=bool)
-                return parser.parse_args()
-            except Exception as e:
-                tk.messagebox.showerror(
-                    '遇到了一点小问题', f'程序启动参数解析失败。已切换为默认参数。\n{e}')
-
-                class aaa:
-                    isNoWin = False
-                return aaa()
-        args = getArgs()
-
-        if Config.get('isTray'):  # 启动托盘
+        flags = Parse(argv)
+        if 'error' in flags:
+            tk.messagebox.showerror(
+                '遇到了一点小问题', flags['error'])
+        # 启动托盘
+        if Config.get('isTray'):
             SysTray.start()
             self.win.wm_protocol(  # 注册窗口关闭事件
                 'WM_DELETE_WINDOW', self.onCloseWin)
-            if not args.isNoWin:  # 非静默模式
+            # ↑ 所以，当不启动托盘时，窗口的×未关联任何事件，是默认的退出软件。
+            if not flags['hide']:  # 非静默模式
                 self.gotoTop()  # 恢复主窗显示
         else:  # 无托盘，强制显示主窗
             self.gotoTop()
+        self.win.after(1, Config.initOK)  # 标记初始化完成
+        if flags['img'] or flags['clipboard'] or flags['screenshot']:  # 有初始任务
+            self.win.after(10, Mission(flags))
+        Notify('欢迎使用 Umi-OCR', '通知弹窗已开启')
         self.win.mainloop()
 
     # 加载图片 ===============================================
 
     def draggedImages(self, paths):  # 拖入图片
-        if not OCRe.msnFlag == MsnFlag.none:
+        if not self.isMsnReady():
             tk.messagebox.showwarning(
                 '任务进行中', '请停止任务后，再拖入图片')
             return
@@ -910,7 +906,7 @@ class MainWin:
         self.addImagesList(pathList)
 
     def openFileWin(self):  # 打开选择文件窗
-        if not OCRe.msnFlag == MsnFlag.none:
+        if not self.isMsnReady():
             return
         suf = Config.get('imageSuffix')  # 许可后缀
         paths = tk.filedialog.askopenfilenames(
@@ -918,6 +914,10 @@ class MainWin:
         self.addImagesList(paths)
 
     def addImagesList(self, paths):  # 添加一批图片列表
+        if not self.isMsnReady():
+            tk.messagebox.showwarning(
+                '任务进行中', '请停止任务后，再添加图片')
+            return
         suf = Config.get('imageSuffix').split()  # 许可后缀列表
 
         def addImage(path):  # 添加一张图片。传入路径，许可后缀。
@@ -965,7 +965,7 @@ class MainWin:
     # 忽略区域 ===============================================
 
     def openSelectArea(self):  # 打开选择区域
-        if not OCRe.msnFlag == MsnFlag.none or not self.win.attributes('-disabled') == 0:
+        if not self.isMsnReady() or not self.win.attributes('-disabled') == 0:
             return
         defaultPath = ""
         if not self.batList.isEmpty():
@@ -1009,7 +1009,7 @@ class MainWin:
     # 表格操作 ===============================================
 
     def clearTable(self):  # 清空表格
-        if not OCRe.msnFlag == MsnFlag.none:
+        if not self.isMsnReady():
             return
         self.progressbar["value"] = 0
         Config.set('tipsTop1', '')
@@ -1022,7 +1022,7 @@ class MainWin:
             self.table.delete(i)  # 表格组件移除
 
     def delImgList(self):  # 图片列表中删除选中
-        if not OCRe.msnFlag == MsnFlag.none:
+        if not self.isMsnReady():
             return
         chi = self.table.selection()
         for i in chi:
@@ -1069,21 +1069,26 @@ class MainWin:
 
     def gotoTop(self, isForce=False):  # 主窗置顶
         flag = Config.get('WindowTopMode')
-        if flag == WindowTopModeFlag.never and not isForce:  # 模式：从不置顶
+        # 模式：静默模式
+        if flag == WindowTopModeFlag.never and not isForce and Config.get('isTray'):
             self.win.attributes('-topmost', 0)
             return
+        # 模式：自动弹出，或不满足静默模式要求
         if self.win.state() == 'iconic':  # 窗口最小化状态下
             self.win.state('normal')  # 恢复前台状态
         self.win.attributes('-topmost', 1)  # 设置层级最前
         geometry = self.win.geometry()  # 缓存主窗当前位置大小
         self.win.deiconify()  # 主窗获取焦点
         self.win.geometry(geometry)  # 若主窗正在贴边，获取焦点会退出贴边模式，所以重新设置位置恢复贴边
-        if flag == WindowTopModeFlag.eternity:  # 模式：窗口永远置顶
-            return
-        # 模式：自动弹出，一段时间后解除置顶
-        self.win.after(500, lambda: self.win.attributes('-topmost', 0))
+        # 未设置窗口置顶，则一段时间后取消层级最前
+        if not Config.get('isWindowTop'):
+            self.win.after(500, lambda: self.win.attributes('-topmost', 0))
 
     # 进行任务 ===============================================
+
+    def isMsnReady(self):
+        '''可以操作下一次任务时返回T'''
+        return OCRe.msnFlag == MsnFlag.none
 
     def setRunning(self, batFlag):  # 设置运行状态。
 
@@ -1134,7 +1139,7 @@ class MainWin:
         self.win.update()
 
     def run(self):  # 运行按钮触发
-        if OCRe.msnFlag == MsnFlag.none:  # 未在运行
+        if self.isMsnReady():  # 未在运行
             if self.batList.isEmpty():
                 return
             # 初始化文本处理器
@@ -1162,7 +1167,7 @@ class MainWin:
         self.gotoTop()  # 主窗置顶
 
     def runClipboard(self, e=None):  # 识别剪贴板
-        if not OCRe.msnFlag == MsnFlag.none:  # 正在运行，不执行
+        if not self.isMsnReady():  # 正在运行，不执行
             return
         clipData = Tool.getClipboardFormat()  # 读取剪贴板
 
@@ -1195,12 +1200,13 @@ class MainWin:
 
         if failFlag:
             self.panelOutput('剪贴板中未查询到图片信息\n')
+            Notify('剪贴板中未查询到图片信息', '')
             # 失败也置顶
             self.gotoTop()  # 主窗置顶
             self.notebook.select(self.notebookTab[1])  # 转到输出卡
 
     def openScreenshot(self, e=None):  # 打开截图窗口
-        if not OCRe.msnFlag == MsnFlag.none or not self.win.attributes('-disabled') == 0:
+        if not self.isMsnReady() or not self.win.attributes('-disabled') == 0:
             return
         self.win.attributes("-disabled", 1)  # 禁用主窗口
         if Config.get('isScreenshotHideWindow'):  # 截图时隐藏主窗口
@@ -1213,6 +1219,9 @@ class MainWin:
     def closeScreenshot(self, flag, errMsg=None):  # 关闭截图窗口，返回T表示已复制到剪贴板
         self.win.attributes("-disabled", 0)  # 启用父窗口
         if errMsg:
+            Notify('截图失败', errMsg)
+            if not errMsg[-1] == '\n':
+                errMsg += '\n'
             self.panelOutput(f'截图失败，{errMsg}')
         if not flag and self.win.state() == 'normal':  # 截图不成功，但窗口非最小化
             self.gotoTop()  # 主窗置顶
@@ -1247,7 +1256,7 @@ class MainWin:
         self.win.after(100, lambda: os._exit(0))
 
     def showTips(self, tipsText):  # 显示提示
-        if not OCRe.msnFlag == MsnFlag.none:
+        if not self.isMsnReady():
             tk.messagebox.showwarning(
                 '任务进行中', '请停止任务后，再打开软件说明')
             return
